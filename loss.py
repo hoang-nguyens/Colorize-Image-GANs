@@ -9,8 +9,8 @@ class Loss(nn.Module):
 
         if mode == 'vanilla':
             self.loss = nn.BCEWithLogitsLoss()
-        elif mode == 'L1':
-            self.loss == nn.L1Loss()
+        elif mode == 'MSE':
+            self.loss == nn.MSELoss()
 
     def __call__(self, preds, target_is_real):
         if target_is_real:
