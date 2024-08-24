@@ -34,7 +34,7 @@ class ColorizationDataset(Dataset):
         img_lab = rgb2lab(img_rgb).astype('float32')
         img_lab = transforms.ToTensor()(img_lab)
         L = img_lab[[0], ...] / 50. - 1
-        ab = img_lab[[1 , 2], ...] / 100.
+        ab = img_lab[[1 , 2], ...] / 110.
 
         return {'L': L, 'ab': ab}
 
