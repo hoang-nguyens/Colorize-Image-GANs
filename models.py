@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import optim
 import numpy as np
-
+from loss import *
 
 class UnetRecursion(nn.Module):
     def __init__(self, n_features, n_inputs, submodule = None, input_channels = None, dropout = False,
@@ -90,7 +90,7 @@ class PatchDiscriminator(nn.Module):
 
 def init_weight(model, init_mode = 'norm', gain = 0.02):
     def init_func(m):
-        classname = m.__class__.__name__()
+        classname = m.__class__.__name__
         if hasattr(m, 'weight') and 'Conv' in classname:
             if init_mode == 'norm':
                 nn.init.normal_(m.weight.data, 0.0, gain)
@@ -111,5 +111,63 @@ def init_model(model, device):
     model = model.to(device)
     model = init_weight(model)
     return model
+
+
+class GANs(nn.Module):
+    def __init__(self, lr_G = 2e-4, lr_D = 2e-4, beta1 = 0.5, beta2 = 0.999, lambdaL1 = 100.):
+        super().__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.lambdaL1 = lambdaL1
+
+        self.net_G = init_model(Unet(), self.device)
+        self.net_D = init_model(PatchDiscriminator(), self.device)
+
+        self.GANLoss = Loss(mode = 'vanilla').to(self.device) # move to device because it have tensor registered in buffers
+        self.L1 = nn.L1Loss()
+
+        self.model_G_optim = optim.Adam(self.net_G.parameters(), lr = lr_G, betas = [beta1, beta2])
+        self.model_D_optim = optim.Adam(self.net_D.parameters(), lr = lr_D, betas = [beta1, beta2])
+
+    def model_requires_grad(self, model, requires = True):
+        for params in model.parameters():
+            params.requires_grad = requires
+
+    def input(self, data):
+        self.L = data['L'].to(self.device)
+        self.ab = data['ab'].to(self.device)
+
+    def forward(self):
+        self.fake_color = self.model_G(self.L)
+
+    def backward_D(self):
+        fake_image = torch.cat([self.L, self.fake_color], 1)
+        real_image = torch.cat([self.L, self.ab], 1)
+
+        fake_pred = self.model_D(fake_image.detach())
+        real_pred = self.model_D(real_image)
+
+        self.model_D_fake_loss = self.GANLoss(fake_pred, False)
+        self.model_real_loss = self.GANLoss(real_pred, True)
+
+        self.model_D_loss = (self.model_real_loss + self.model_D_fake_loss) *0.5
+
+        self.model_D_loss.backward()
+
+    def backward_G(self):
+        fake_image = torch.cat([self.L, self.fake_color], 1)
+        real_image = torch.cat([self.L, self.ab], 1)
+
+        fake_pred = self.model_D(fake_image)
+
+        self.model_G_BCELoss = self.GANLoss(fake_pred, True)
+        self.model_G_L1Loss = self.L1(self.fake_color, self.ab) * self.lambdaL1
+
+        self.model_G_loss = self.model_G_L1Loss + self.model_G_BCELoss
+
+        self.model_G_loss.backward()
+
+
+
+model = GANs()
 
 
