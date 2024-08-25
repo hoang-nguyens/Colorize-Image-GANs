@@ -1,11 +1,12 @@
 import time
 
 import numpy as np
-from skimage.color import lab2rgb
+from skimage.color import rgb2lab, lab2rgb
 import matplotlib.pyplot as plt
 
 import torch
 
+folder_image_demo = r"D:\Colorization\demo image"
 
 class AverageMeter:
     def __init__(self):
@@ -81,9 +82,27 @@ def visualize(model, data, save=True):
         ax.axis("off")
     plt.show()
     if save:
-        fig.savefig(f"colorization_{time.time()}.png")
+        fig.savefig(f"{folder_image_demo}/colorization_{time.time()}.png")
 
 
 def log_results(loss_meter_dict):
     for loss_name, loss_meter in loss_meter_dict.items():
         print(f"{loss_name}: {loss_meter.avg:.5f}")
+
+
+def save_checkpoint(model, optimizers, epoch, losses, filepath = 'checkpoint.pth'):
+    checkpoint = {
+        'epoch' : epoch,
+        'model_state_dict' : model.state_dict(),
+        'optimizer_state_dicts' : [opt.state_dict() for opt in optimizers],
+        'losses' : {key: loss.ite() for key, loss in losses.items()},
+    }
+    torch.save(checkpoint, filepath)
+
+def load_checkpoint(filepath, model, optimizer):
+    checkpoint = torch.load(filepath)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    return model, optimizer, epoch, loss
