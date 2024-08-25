@@ -132,42 +132,57 @@ class GANs(nn.Module):
         for params in model.parameters():
             params.requires_grad = requires
 
-    def input(self, data):
+    def setup_input(self, data):
         self.L = data['L'].to(self.device)
         self.ab = data['ab'].to(self.device)
 
     def forward(self):
-        self.fake_color = self.model_G(self.L)
+        self.fake_color = self.net_G(self.L)
 
     def backward_D(self):
         fake_image = torch.cat([self.L, self.fake_color], 1)
         real_image = torch.cat([self.L, self.ab], 1)
 
-        fake_pred = self.model_D(fake_image.detach())
-        real_pred = self.model_D(real_image)
+        fake_pred = self.net_D(fake_image.detach())
+        real_pred = self.net_D(real_image)
 
-        self.model_D_fake_loss = self.GANLoss(fake_pred, False)
-        self.model_real_loss = self.GANLoss(real_pred, True)
+        self.loss_D_fake = self.GANLoss(fake_pred, False)
+        self.loss_D_real = self.GANLoss(real_pred, True)
 
-        self.model_D_loss = (self.model_real_loss + self.model_D_fake_loss) *0.5
+        self.loss_D = (self.loss_D_real + self.loss_D_fake) *0.5
 
-        self.model_D_loss.backward()
+        self.loss_D.backward()
 
     def backward_G(self):
         fake_image = torch.cat([self.L, self.fake_color], 1)
         real_image = torch.cat([self.L, self.ab], 1)
 
-        fake_pred = self.model_D(fake_image)
+        fake_pred = self.net_D(fake_image)
 
-        self.model_G_BCELoss = self.GANLoss(fake_pred, True)
-        self.model_G_L1Loss = self.L1(self.fake_color, self.ab) * self.lambdaL1
+        self.loss_G_GAN = self.GANLoss(fake_pred, True)
+        self.loss_G_L1 = self.L1(self.fake_color, self.ab) * self.lambdaL1
 
-        self.model_G_loss = self.model_G_L1Loss + self.model_G_BCELoss
+        self.loss_G = self.loss_G_GAN + self.loss_G_L1
 
-        self.model_G_loss.backward()
+        self.loss_G.backward()
+
+    def optimize(self):
+        self.forward()
+
+        self.net_D.train()
+        self.model_requires_grad(self.net_D, True)
+        self.model_D_optim.zero_grad()
+        self.backward_D()
+        self.model_D_optim.step()
+
+        self.net_G.train()
+        self.model_requires_grad(self.net_D, False)
+        self.model_G_optim.zero_grad()
+        self.backward_G()
+        self.model_G_optim.step()
 
 
 
-model = GANs()
+
 
 
